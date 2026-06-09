@@ -46,22 +46,34 @@ from pydantic import BaseModel
 class M2MAuthConfig(BaseModel):
     """
     Minimal config for client-credentials flow.
-    keycloak_realm_url: the *realm* URL, same one you already use for JWKS
-                        (e.g., https://kc.example/realms/myrealm)
-    client_id:          confidential client ID (e.g., "knowledge")
-    secret_env:         env var name that stores the client secret (e.g., "KEYCLOAK_KNOWLEDGE_FLOW_CLIENT_SECRET")
-    scope:              optional Keycloak scopes (rarely needed)
+
+    Pass ``token_url`` directly (provider-agnostic).
+    For backward compatibility ``keycloak_realm_url`` is still accepted and
+    the Keycloak token endpoint is derived from it automatically.
+
+    Preferred (any provider):
+        token_url  — full token endpoint URL returned by ``IdpPort.m2m_token_url()``
+        scope      — optional scope (required for Entra: ``api://<id>/.default``)
+
+    Legacy (Keycloak only):
+        keycloak_realm_url — realm URL; ``token_url`` is derived from it
     """
 
-    keycloak_realm_url: str
+    token_url: str = ""
     client_id: str
     secret_env: str
     scope: str | None = None
+    # Deprecated — kept for callers that haven't migrated yet.
+    keycloak_realm_url: str = ""
 
-    @property
-    def token_url(self) -> str:
-        # Mirrors how you compute JWKS: realm/protocol/openid-connect/token
-        return f"{self.keycloak_realm_url}/protocol/openid-connect/token"
+    def model_post_init(self, __context: object) -> None:
+        # If only the legacy field is supplied, derive token_url from it.
+        if not self.token_url and self.keycloak_realm_url:
+            object.__setattr__(
+                self,
+                "token_url",
+                f"{self.keycloak_realm_url}/protocol/openid-connect/token",
+            )
 
 
 class M2MTokenProvider:
@@ -89,9 +101,8 @@ class M2MTokenProvider:
                 return self._token
 
             if not self._secret:
-                # Fail fast: missing secret will otherwise cause confusing 401s
                 raise RuntimeError(
-                    f"Missing Keycloak client secret in env: {self.cfg.secret_env}"
+                    f"Missing OIDC client secret in env: {self.cfg.secret_env}"
                 )
 
             form = {

@@ -29,6 +29,7 @@ from fred_core import (
     M2MTokenProvider,
     make_m2m_asgi_client,
 )
+from fred_core.security.idp.port import get_idp
 
 from knowledge_flow_backend.application_context import get_configuration
 
@@ -52,20 +53,19 @@ class _AppState:
         if self._app is None:
             return  # not attach_app'ed yet
 
-        # Read the same Keycloak values you use in initialize_user_security()
-        get_configuration().security.m2m.client_id
-        realm_url = get_configuration().security.m2m.realm_url
-        client_id = get_configuration().security.m2m.client_id
+        m2m = get_configuration().security.m2m
+        client_id = m2m.client_id
         token_env_var_name = "KEYCLOAK_KNOWLEDGE_FLOW_CLIENT_SECRET"  # nosec B105
 
-        if not realm_url or not client_id:
+        if not client_id:
             # Soft-fail: allows tests/dev without M2M; errors only when accessed.
             return
 
         cfg = M2MAuthConfig(
-            keycloak_realm_url=str(realm_url),
+            token_url=get_idp().m2m_token_url(),
             client_id=client_id,
             secret_env=token_env_var_name,
+            scope=get_idp().m2m_scope(),
         )
         self._m2m_provider = M2MTokenProvider(cfg)
         auth = M2MBearerAuth(self._m2m_provider)

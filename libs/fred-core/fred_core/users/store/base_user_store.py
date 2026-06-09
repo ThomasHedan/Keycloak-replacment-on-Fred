@@ -23,6 +23,16 @@ from ..user_models import GcuVersionsType, UserRow
 
 class BaseUserStore(ABC):
     @abstractmethod
+    async def ensure_user(self, user_id: UUID, session: AsyncSession | None = None) -> None:
+        """
+        Idempotent JIT provisioning: create a user row on first sight, no-op otherwise.
+
+        Called by get_current_user() on every authenticated request so that GCU
+        acceptance, storage quotas and the user picker always have a stable row.
+        """
+        pass
+
+    @abstractmethod
     async def update_gcu_version(
         self,
         user_id: UUID,

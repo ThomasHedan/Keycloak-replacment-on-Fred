@@ -57,18 +57,24 @@ class ClientCredentialsProvider:
     def __init__(
         self,
         *,
-        keycloak_base: str,
-        realm: str,
+        token_url: str,
         client_id: str,
         client_secret: str,
+        scope: Optional[str] = None,
         audience: Optional[str] = None,
         verify: Optional[bool] = None,
+        # Deprecated keyword arguments kept for backward compatibility.
+        # Pass token_url directly instead.
+        keycloak_base: Optional[str] = None,
+        realm: Optional[str] = None,
     ):
-        self.token_url = (
-            f"{keycloak_base.rstrip('/')}/realms/{realm}/protocol/openid-connect/token"
-        )
+        if keycloak_base is not None and realm is not None:
+            # Legacy callers that still pass keycloak_base + realm.
+            token_url = f"{keycloak_base.rstrip('/')}/realms/{realm}/protocol/openid-connect/token"
+        self.token_url = token_url
         self.client_id = client_id
         self.client_secret = client_secret
+        self.scope = scope
         self.audience = audience
         self.verify = verify
         self._tok: Optional[str] = None
@@ -81,24 +87,25 @@ class ClientCredentialsProvider:
                 return self._tok
             raise RuntimeError("Token is missing.")
 
-        form = {
+        form: dict[str, str] = {
             "grant_type": "client_credentials",
             "client_id": self.client_id,
             "client_secret": self.client_secret,
         }
+        if self.scope:
+            form["scope"] = self.scope
         if self.audience:
             form["audience"] = self.audience
 
         r = requests.post(self.token_url, data=form, timeout=10, verify=self.verify)
         if r.status_code >= 400:
-            # Try to show Keycloak's error payload
             try:
                 err = r.json()
             except Exception:
                 err = {"error": r.text[:200]}
             raise RuntimeError(
-                f"Keycloak token request failed "
-                f"(status={r.status_code}, client_id={self.client_id}, realm_url={self.token_url}): "
+                f"OIDC token request failed "
+                f"(status={r.status_code}, client_id={self.client_id}, token_url={self.token_url}): "
                 f"{err}"
             )
         payload = r.json()

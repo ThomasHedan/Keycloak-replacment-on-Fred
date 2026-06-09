@@ -53,6 +53,16 @@ class PostgresUserStore(BaseUserStore):
     async def save(self, user: UserRow) -> None:
         pass
 
+    async def ensure_user(self, user_id: UUID, session: AsyncSession | None = None) -> None:
+        async with use_session(self._sessions, session) as s:
+            if await s.get(UserRow, user_id) is None:
+                s.add(UserRow(
+                    id=user_id,
+                    gcuVersionAccepted=None,
+                    gcuAcceptedAt=None,
+                    current_resources_storage_size=0,
+                ))
+
     async def find_user_by_id(
         self, user_id: UUID, session: AsyncSession | None = None
     ) -> Optional[UserRow]:
