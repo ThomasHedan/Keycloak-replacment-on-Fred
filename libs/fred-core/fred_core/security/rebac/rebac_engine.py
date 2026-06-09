@@ -22,10 +22,6 @@ from enum import Enum
 from typing import Iterable
 
 from fred_core.common import personal_team_id
-from fred_core.security.keycloak.keycloack_admin_client import (
-    KeycloackDisabled,
-    create_keycloak_admin,
-)
 from fred_core.security.models import AuthorizationError, Resource
 from fred_core.security.structure import KeycloakUser, M2MSecurity
 
@@ -206,8 +202,7 @@ class RebacEngine(ABC):
     """
 
     def __init__(self, m2m_security: M2MSecurity) -> None:
-        """Initialize engine dependencies used for contextual relations."""
-        self.keycloak_client = create_keycloak_admin(m2m_security)
+        pass
 
     @property
     def enabled(self) -> bool:
@@ -574,36 +569,13 @@ class RebacEngine(ABC):
         return group_relations | org_relations
 
     async def groups_list_to_relations(self, user: KeycloakUser) -> set[Relation]:
-        """Convert token group paths into team membership statements.
+        """Convert token group claims into team membership statements.
 
-        Example:
-        - group `/thales` becomes `user -> member -> team:thales`.
+        OpenFGA is now the sole source of truth for team membership, so this
+        method returns an empty set — relations are written directly to OpenFGA
+        when members are added/removed and are no longer derived from the token.
         """
-        if isinstance(self.keycloak_client, KeycloackDisabled):
-            return set()
-
-        # Each user is a member of its own personal team
-        # TODO 1501 Remove when teams are not based on keycloak anymore
-        relation: set[Relation] = {
-            Relation(
-                subject=RebacReference(Resource.USER, user.uid),
-                relation=RelationType.MEMBER,
-                resource=RebacReference(Resource.TEAM, personal_team_id(user.uid)),
-            )
-        }
-        for group in user.groups:
-            relation.add(
-                Relation(
-                    subject=RebacReference(Resource.USER, user.uid),
-                    relation=RelationType.MEMBER,
-                    resource=RebacReference(
-                        Resource.TEAM,
-                        (await self.keycloak_client.a_get_group_by_path(group))["id"],
-                    ),
-                )
-            )
-
-        return relation
+        return set()
 
     async def user_role_to_organization_relation(
         self, user: KeycloakUser

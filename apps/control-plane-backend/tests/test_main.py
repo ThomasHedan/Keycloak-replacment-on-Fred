@@ -19,7 +19,6 @@ from fred_core import RelationType, SessionSchema, TeamPermission
 from fred_core.common import TeamId, personal_team_id
 from fred_core.teams.metadata_store import TeamMetadata
 from httpx import ASGITransport, AsyncClient
-from keycloak.exceptions import KeycloakPutError
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import create_async_engine
 
@@ -39,7 +38,6 @@ from control_plane_backend.product.service import _RuntimeTemplatePayload
 from control_plane_backend.prompts.store import PromptRecord
 from control_plane_backend.sessions.store import SessionMetadataRecord
 from control_plane_backend.teams.schemas import (
-    KeycloakGroupSummary,
     Team,
     TeamWithPermissions,
 )
@@ -524,42 +522,6 @@ async def test_list_users_returns_empty_without_keycloak_m2m() -> None:
     assert resp.status_code == 200
     assert resp.json() == []
 
-
-@pytest.mark.asyncio
-async def test_create_user_requires_keycloak_m2m() -> None:
-    app = create_app()
-    async with AsyncClient(
-        transport=ASGITransport(app=app), base_url="http://test"
-    ) as client:
-        resp = await client.post(
-            "/control-plane/v1/users",
-            json={
-                "username": "test-user",
-                "email": "test-user@app.local",
-                "password": "Password123!",  # pragma: allowlist secret
-            },
-        )
-
-    assert resp.status_code == 503
-    assert (
-        resp.json()["detail"]
-        == "Keycloak M2M is disabled; cannot perform user operations."
-    )
-
-
-@pytest.mark.asyncio
-async def test_delete_user_requires_keycloak_m2m() -> None:
-    app = create_app()
-    async with AsyncClient(
-        transport=ASGITransport(app=app), base_url="http://test"
-    ) as client:
-        resp = await client.delete("/control-plane/v1/users/user-001")
-
-    assert resp.status_code == 503
-    assert (
-        resp.json()["detail"]
-        == "Keycloak M2M is disabled; cannot perform user operations."
-    )
 
 
 @pytest.mark.asyncio
@@ -1564,10 +1526,6 @@ async def test_add_team_member_checks_permission_for_target_relation(
     relation: str,
     expected_permission: TeamPermission,
 ) -> None:
-    class _FakeKeycloakAdmin:
-        async def a_group_user_add(self, _user_id: str, _group_id: str) -> None:
-            return None
-
     captured_permissions: list[list[TeamPermission]] = []
 
     async def _fake_validate_team_and_check_permission(
@@ -1576,7 +1534,7 @@ async def test_add_team_member_checks_permission_for_target_relation(
     ):
         permissions = _args[3]
         captured_permissions.append(permissions)
-        return _FakeKeycloakAdmin(), {"id": "thales", "name": "Thales"}, None
+        return None
 
     async def _fake_add_team_member_relation(*_args, **_kwargs):
         return None
@@ -1615,22 +1573,18 @@ async def test_update_team_checks_can_update_info_permission(
             self.calls.append((team_id, patch.model_dump(exclude_unset=True)))
             return TeamMetadata(id=TeamId(team_id))
 
-    class _FakeKeycloakAdmin:
-        async def a_get_group_members(self, _team_id: str, _query: dict) -> list[dict]:
-            return []
-
     fake_metadata_store = _FakeMetadataStore()
     captured_permissions: list[list[TeamPermission]] = []
 
     async def _fake_validate_team_and_check_permission(*_args, **_kwargs):
         permissions = _args[3]
         captured_permissions.append(permissions)
-        return _FakeKeycloakAdmin(), {"id": "thales", "name": "Thales"}, "token"
+        return None
 
     async def _fake_get_team_permissions_for_user(*_args, **_kwargs):
         return [TeamPermission.CAN_UPDATE_INFO]
 
-    async def _fake_enrich_groups_with_team_data(*_args, **_kwargs):
+    async def _fake_enrich_teams_with_data(*_args, **_kwargs):
         return [Team(id=TeamId("thales"), name="Thales")]
 
     monkeypatch.setattr(
@@ -1642,8 +1596,8 @@ async def test_update_team_checks_can_update_info_permission(
         _fake_get_team_permissions_for_user,
     )
     monkeypatch.setattr(
-        "control_plane_backend.teams.service._enrich_groups_with_team_data",
-        _fake_enrich_groups_with_team_data,
+        "control_plane_backend.teams.service._enrich_teams_with_data",
+        _fake_enrich_teams_with_data,
     )
     monkeypatch.setattr(
         "control_plane_backend.app.context.ApplicationContext.get_team_metadata_store",
