@@ -1636,7 +1636,7 @@ async def test_enrich_groups_uses_team_metadata_store(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     from control_plane_backend.teams.dependencies import TeamServiceDependencies
-    from control_plane_backend.teams.service import _enrich_groups_with_team_data
+    from control_plane_backend.teams.service import _enrich_teams_with_data
 
     class _FakeMetadataStore:
         async def get_by_team_ids(
@@ -1656,10 +1656,6 @@ async def test_enrich_groups_uses_team_metadata_store(
             _ = expires
             assert key == "teams/team-1/banner-1.png"
             return "https://example.test/banner.png"
-
-    class _FakeAdmin:
-        async def a_get_group_members(self, _group_id: str, _query: dict) -> list[dict]:
-            return [{"id": "user-1"}]
 
     async def _fake_get_team_users_by_relation(*_args, **_kwargs):
         return set()
@@ -1682,7 +1678,6 @@ async def test_enrich_groups_uses_team_metadata_store(
         configuration=mock_config,
         rebac=cast(Any, object()),
         scheduler_backend=cast(Any, object()),
-        create_keycloak_admin_client=cast(Any, lambda: object()),
         get_team_metadata_store=lambda: cast(Any, _FakeMetadataStore()),
         get_content_store=lambda: cast(Any, _FakeContentStore()),
         get_session_store=cast(Any, lambda: object()),
@@ -1692,15 +1687,10 @@ async def test_enrich_groups_uses_team_metadata_store(
         run_lifecycle_manager_once_in_memory=cast(Any, lambda _input: object()),
     )
 
-    teams = await _enrich_groups_with_team_data(
-        cast(Any, _FakeAdmin()),
-        rebac=cast(
-            Any, object()
-        ),  # unused due monkeypatching _get_team_users_by_relation
+    teams = await _enrich_teams_with_data(
+        rebac=cast(Any, object()),  # unused due monkeypatching _get_team_users_by_relation
         user=cast(Any, type("User", (), {"uid": "user-1"})()),
-        groups=[
-            KeycloakGroupSummary(id=TeamId("team-1"), name="Team 1", member_count=0)
-        ],
+        team_ids=[TeamId("team-1")],
         deps=fake_deps,
     )
 
@@ -1841,7 +1831,7 @@ async def test_upload_team_banner_rejects_invalid_content_type(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     async def _fake_validate_team_and_check_permission(*_args, **_kwargs):
-        return object(), {"id": "thales", "name": "Thales"}, None
+        return None
 
     monkeypatch.setattr(
         "control_plane_backend.teams.service._validate_team_and_check_permission",
@@ -1866,7 +1856,7 @@ async def test_upload_team_banner_rejects_file_too_large(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     async def _fake_validate_team_and_check_permission(*_args, **_kwargs):
-        return object(), {"id": "thales", "name": "Thales"}, None
+        return None
 
     monkeypatch.setattr(
         "control_plane_backend.teams.service._validate_team_and_check_permission",
@@ -1888,69 +1878,7 @@ async def test_upload_team_banner_rejects_file_too_large(
 
 
 @pytest.mark.asyncio
-async def test_add_team_member_returns_clear_error_when_keycloak_forbids_operation(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    class _FakeKeycloakAdmin:
-        async def a_group_user_add(self, _user_id: str, _group_id: str) -> None:
-            raise KeycloakPutError(
-                error_message="HTTP 403 Forbidden",
-                response_code=403,
-                response_body=b'{"error":"HTTP 403 Forbidden"}',
-            )
-
-    async def _fake_validate_team_and_check_permission(*_args, **_kwargs):
-        return _FakeKeycloakAdmin(), {"id": "thales", "name": "Thales"}, None
-
-    monkeypatch.setattr(
-        "control_plane_backend.teams.service._validate_team_and_check_permission",
-        _fake_validate_team_and_check_permission,
-    )
-
-    app = create_app()
-    async with AsyncClient(
-        transport=ASGITransport(app=app), base_url="http://test"
-    ) as client:
-        resp = await client.post(
-            "/control-plane/v1/teams/thales/members",
-            json={"user_id": "user-001", "relation": "member"},
-        )
-
-    assert resp.status_code == 403
-    assert (
-        resp.json()["detail"]
-        == "Control Plane is not allowed to manage team membership in Keycloak. "
-        "Ask platform admin to grant realm-management/manage-users "
-        "to the 'control-plane' client service account."
-    )
-
-
-@pytest.mark.asyncio
-async def test_delete_team_member_requires_keycloak_m2m() -> None:
-    app = create_app()
-    async with AsyncClient(
-        transport=ASGITransport(app=app), base_url="http://test"
-    ) as client:
-        resp = await client.delete(
-            "/control-plane/v1/teams/contractors/members/user-001",
-        )
-
-    assert resp.status_code == 503
-    payload = resp.json()
-    assert (
-        payload["detail"] == "Keycloak M2M is disabled; cannot perform team operations."
-    )
-
-
-@pytest.mark.asyncio
 async def test_delete_team_member_enqueues_matching_team_sessions(monkeypatch) -> None:
-    class _FakeKeycloakAdmin:
-        async def a_get_group(self, _group_id: str) -> dict[str, str]:
-            return {"id": "swiftpost", "name": "SwiftPost"}
-
-        async def a_group_user_remove(self, _user_id: str, _group_id: str) -> None:
-            return None
-
     class _FakeRebac:
         def __init__(self) -> None:
             self.delete_relations_calls = 0
@@ -2003,7 +1931,7 @@ async def test_delete_team_member_enqueues_matching_team_sessions(monkeypatch) -
         return UserTeamRelation.MEMBER
 
     async def _fake_validate_team_and_check_permission(*_args, **_kwargs):
-        return _FakeKeycloakAdmin(), {"id": "swiftpost", "name": "SwiftPost"}, None
+        return None
 
     monkeypatch.setattr(
         "control_plane_backend.teams.service._get_user_role_in_team",
@@ -2064,10 +1992,6 @@ async def test_delete_team_member_runs_in_memory_lifecycle_pass_when_enabled(
     )
     from control_plane_backend.teams.dependencies import TeamServiceDependencies
 
-    class _FakeKeycloakAdmin:
-        async def a_group_user_remove(self, _user_id: str, _group_id: str) -> None:
-            return None
-
     class _FakeRebac:
         async def delete_relations(self, _relations) -> None:
             return None
@@ -2109,7 +2033,7 @@ async def test_delete_team_member_runs_in_memory_lifecycle_pass_when_enabled(
         return UserTeamRelation.MEMBER
 
     async def _fake_validate_team_and_check_permission(*_args, **_kwargs):
-        return _FakeKeycloakAdmin(), {"id": "temp-lab", "name": "Temp Lab"}, None
+        return None
 
     async def _fake_run_lifecycle_manager_once_in_memory(_input_data):
         lifecycle_calls.append(1)
@@ -2134,7 +2058,6 @@ async def test_delete_team_member_runs_in_memory_lifecycle_pass_when_enabled(
         configuration=cast(Any, fake_configuration),
         rebac=cast(Any, fake_rebac),
         scheduler_backend=SchedulerBackend.MEMORY,
-        create_keycloak_admin_client=cast(Any, lambda: _FakeKeycloakAdmin()),
         get_team_metadata_store=lambda: cast(Any, object()),
         get_content_store=lambda: cast(Any, object()),
         get_session_store=cast(Any, lambda: fake_session_store),
