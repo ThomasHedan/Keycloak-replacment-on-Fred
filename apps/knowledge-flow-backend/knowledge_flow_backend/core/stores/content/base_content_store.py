@@ -1,0 +1,268 @@
+# Copyright Thales 2025
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+import logging
+from abc import ABC, abstractmethod
+from datetime import datetime, timedelta
+from pathlib import Path
+from typing import BinaryIO, List, Optional
+
+from pydantic import BaseModel
+
+logger = logging.getLogger(__name__)
+
+
+class FileMetadata(BaseModel):
+    """
+    Metadata structure for a document's primary content.
+    """
+
+    size: int
+    file_name: str
+    content_type: Optional[str] = None
+
+
+class StoredObjectInfo(BaseModel):
+    """
+    Metadata for *generic objects* (agent assets, etc.), addressed by a storage key.
+    """
+
+    key: str
+    size: int
+    file_name: str
+    content_type: Optional[str] = None
+    modified: Optional[datetime] = None
+    etag: Optional[str] = None
+    document_uid: Optional[str] = None
+
+
+class BaseContentStore(ABC):
+    @abstractmethod
+    def save_input(self, document_uid: str, input_dir: Path) -> None:
+        """Saves the input/ folder (raw user-uploaded file)."""
+        pass
+
+    @abstractmethod
+    def save_output(self, document_uid: str, output_dir: Path) -> None:
+        """Saves the output/ folder (processed markdown or CSV)."""
+        pass
+
+    @abstractmethod
+    def save_content(self, document_uid: str, document_dir: Path) -> None:
+        """
+        Uploads the content of a directory (recursively) to storage.
+        The directory should contain all files related to the document.
+        The document_id is used to create a unique path in the storage.
+        The directory structure will be preserved in the storage.
+        """
+        pass
+
+    @abstractmethod
+    def delete_content(self, document_uid: str) -> None:
+        """
+        Deletes the content of a document from storage.
+        The document_uid is used to identify the document in storage.
+        """
+        pass
+
+    @abstractmethod
+    def get_content(self, document_uid: str) -> BinaryIO:
+        """
+        Retrieve a readable binary stream for the document's primary content.
+
+        Returns:
+            BinaryIO: A file-like object you can stream from.
+
+        Raises:
+            FileNotFoundError: If the document is not found.
+        """
+        pass
+
+    @abstractmethod
+    def get_preview_bytes(self, doc_path: str) -> bytes:
+        """
+        Returns the preview image bytes (from preview/preview.png).
+        """
+        pass
+
+    @abstractmethod
+    def get_media(self, document_uid: str, media_id: str) -> BinaryIO:
+        """
+        Returns the media file associated with a document.
+        """
+        pass
+
+    @abstractmethod
+    def clear(self) -> None:
+        """
+        Optional: Clear the store. Only supported by test-friendly stores.
+
+        Default implementation does nothing and logs a debug message.
+        """
+        logger.debug("clear() called on BaseContentStore: no-op by default.")
+
+    @abstractmethod
+    def get_local_copy(self, document_uid: str, destination_dir: Path) -> Path:
+        """
+        Ensures the original uploaded file is accessible on the local filesystem.
+
+        This is useful for workflows or processing logic that requires a real path on disk.
+
+        Returns:
+            Path: Path to the local file (guaranteed to exist).
+
+        Raises:
+            FileNotFoundError: If the content does not exist or cannot be retrieved.
+        """
+        pass
+
+    @abstractmethod
+    def get_file_metadata(self, document_uid: str) -> FileMetadata:
+        """
+        Retrieves metadata about the document's primary content.
+
+        Returns:
+            dict: A dictionary containing at least:
+                - 'size': int (Total size in bytes)
+                - 'file_name': str (The original file name)
+                - 'content_type': str (The MIME type)
+
+        Raises:
+            FileNotFoundError: If the document is not found.
+        """
+        pass
+
+    @abstractmethod
+    def get_content_range(self, document_uid: str, start: int, length: int) -> BinaryIO:
+        """
+        Retrieves a readable binary stream for a specific byte range of the
+        document's primary content. This is crucial for Range Requests (206 Partial Content).
+
+        Args:
+            document_uid: The document ID.
+            start: The starting byte index (inclusive).
+            length: The number of bytes to retrieve.
+
+        Returns:
+            BinaryIO: A file-like object streaming the requested byte range.
+
+        Raises:
+            FileNotFoundError: If the document is not found.
+        """
+        pass
+
+    @abstractmethod
+    def put_object(self, key: str, stream: BinaryIO, *, content_type: str) -> StoredObjectInfo:
+        """
+        Store/replace a binary object at 'key'.
+        Returns StoredObjectInfo of the final stored object.
+        """
+        pass
+
+    def put_file(self, key: str, file_path: Path, *, content_type: str) -> StoredObjectInfo:
+        """
+        Store one existing local file at `key`.
+
+        Why this exists:
+        - Large tabular artifacts should be uploaded directly from disk when the
+          backend already produced a local file.
+        - The default implementation preserves the existing `put_object(...)`
+          contract for stores that do not have a more efficient file-native API.
+
+        How to use:
+        - Pass the storage key and the local file path to upload.
+        - Override in concrete stores when they can avoid an extra Python-side
+          buffering step.
+
+        Example:
+        - `store.put_file("tabular/data.parquet", Path("/tmp/data.parquet"), content_type="application/vnd.apache.parquet")`
+        """
+        with file_path.open("rb") as stream:
+            return self.put_object(key, stream, content_type=content_type)
+
+    @abstractmethod
+    def get_object_stream(self, key: str, *, start: Optional[int] = None, length: Optional[int] = None) -> BinaryIO:
+        """
+        Return a streaming file-like handle for 'key'.
+        Supports partial reads via (start, length).
+        """
+        pass
+
+    @abstractmethod
+    def stat_object(self, key: str) -> StoredObjectInfo:
+        """
+        Return metadata for object 'key'; raise FileNotFoundError if absent.
+        """
+        pass
+
+    @abstractmethod
+    def list_objects(self, prefix: str) -> List[StoredObjectInfo]:
+        """
+        Return a *flat* list of objects under 'prefix' (recursive).
+        """
+        pass
+
+    def list_document_uids(self) -> List[str]:  # pragma: no cover - optional capability
+        """
+        Optional helper: return the list of document_uids known to the content store.
+
+        Default implementation returns an empty list so callers can rely on hasattr()
+        or simply call and handle the empty result.
+        """
+        return []
+
+    @abstractmethod
+    def delete_object(self, key: str) -> None:
+        """
+        Delete object 'key'; raise FileNotFoundError if absent.
+        """
+        pass
+
+    @abstractmethod
+    def get_presigned_url(self, key: str, expires: timedelta = timedelta(hours=1)) -> str:
+        """
+        Generate a presigned URL for direct browser access to an object.
+
+        Args:
+            key: The object key (e.g., "teams/abc/banner-uuid.jpg")
+            expires: URL expiration time (default: 1 hour)
+
+        Returns:
+            Presigned URL string
+
+        Raises:
+            FileNotFoundError: If object doesn't exist
+            NotImplementedError: If the storage backend doesn't support presigned URLs
+        """
+        pass
+
+    def get_presigned_url_internal(self, key: str, expires: timedelta = timedelta(hours=1)) -> str:
+        """
+        Generate a presigned URL intended for backend-to-storage access.
+
+        Why this exists:
+        - Server-side runtimes such as tabular DuckDB queries should use the
+          storage endpoint that is cheapest and most direct from inside the
+          cluster, without changing browser-facing URL semantics.
+
+        How to use:
+        - Call from server-side code paths that need a temporary HTTP(S) object
+          URL.
+        - Concrete stores may override this helper to sign against an internal
+          endpoint while leaving `get_presigned_url(...)` browser-oriented.
+
+        Example:
+        - `store.get_presigned_url_internal("tabular/data.parquet", expires=timedelta(hours=1))`
+        """
+        return self.get_presigned_url(key, expires=expires)

@@ -1,0 +1,26 @@
+{{- range $name, $app := .Values.applications }}
+  {{- $appEnabled := true }}
+  {{- if hasKey $app "enabled" }}
+    {{- $appEnabled = $app.enabled }}
+  {{- end }}
+  {{- if $appEnabled }}
+  {{- $ctx := dict "app" $app "root" $ }}
+  {{- include "common-library.service" $ctx }}
+  {{- include "common-library.service-metrics" $ctx }}
+  {{- include "common-library.service-monitor" $ctx }}
+  {{- include "common-library.serviceaccount" $ctx }}
+  {{- include "common-library.ingress" $ctx }}
+  {{- include "common-library.rbac" $ctx }}
+  {{- include "common-library.configmap-frontend" $ctx }}
+  {{- include "common-library.configmap-kube" $ctx }}
+  {{- include "common-library.configmap-backend" $ctx }}
+  {{- include "common-library.configmap-catalog" $ctx }}
+  {{- include "common-library.pvc_pv" $ctx }}
+  {{- include "common-library.deployment" $ctx }}
+  {{- include "common-library.secrets-env" $ctx }}
+  {{- include "common-library.job" $ctx }}
+  {{- include "common-library.hook-migration-rbac" $ctx }}
+  {{- include "common-library.hook-scale-down" $ctx }}
+  {{- include "common-library.hook-migration" $ctx }}
+  {{- end }}
+{{- end }}

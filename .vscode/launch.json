@@ -1,0 +1,309 @@
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "name": "Debug Fred Agents (configuration.yaml)",
+      "type": "debugpy",
+      "request": "launch",
+      "pythonPath": "${workspaceFolder}/apps/fred-agents/.venv/bin/python",
+      "cwd": "${workspaceFolder}/apps/fred-agents",
+      "module": "uvicorn",
+      "args": [
+        "fred_agents.main:create_app",
+        "--factory",
+        "--host",
+        "0.0.0.0",
+        "--port",
+        "8000",
+        "--log-level",
+        "info",
+        "--loop",
+        "asyncio",
+        "--reload",
+        "--reload-dir", "${workspaceFolder}/apps/fred-agents/config",
+        "--reload-include", "*.py",
+        "--reload-include", "*.yaml"
+      ],
+      "env": {
+        "PYTHONPATH": "${workspaceFolder}/apps/fred-agents",
+        "CONFIG_FILE": "${workspaceFolder}/apps/fred-agents/config/configuration.yaml"
+      },
+      "justMyCode": false,
+      "console": "integratedTerminal"
+    },
+    {
+      "name": "Debug Fred Agents (configuration_prod.yaml)",
+      "type": "debugpy",
+      "request": "launch",
+      "python": "${workspaceFolder}/apps/fred-agents/.venv/bin/python",
+      "cwd": "${workspaceFolder}/apps/fred-agents",
+      "module": "uvicorn",
+      "args": [
+        "fred_agents.main:create_app",
+        "--factory",
+        "--host",
+        "0.0.0.0",
+        "--port",
+        "8000",
+        "--log-level",
+        "info",
+        "--loop",
+        "asyncio",
+        "--reload",
+        "--reload-dir", "${workspaceFolder}/apps/fred-agents/config",
+        "--reload-include", "*.py",
+        "--reload-include", "*.yaml",
+
+      ],
+      "env": {
+        "PYTHONPATH": "${workspaceFolder}/apps/fred-agents",
+        "CONFIG_FILE": "${workspaceFolder}/apps/fred-agents/config/configuration_prod.yaml"
+      },
+      "justMyCode": false,
+      "console": "integratedTerminal"
+    },
+    {
+      "name": "Debug Agentic Academy",
+      "type": "debugpy",
+      "request": "launch",
+      "python": "${workspaceFolder}/apps/fred-agents/.venv/bin/python",
+      "cwd": "${workspaceFolder}/apps/fred-agents",
+      "module": "uvicorn",
+      "args": [
+        "fred_agents.main:create_app",
+        "--factory",
+        "--host",
+        "0.0.0.0",
+        "--port",
+        "8000",
+        "--log-level",
+        "info",
+        "--loop",
+        "asyncio",
+        "--reload",
+        "--reload-dir", "${workspaceFolder}/apps/fred-agents/config",
+        "--reload-include", "*.py",
+        "--reload-include", "*.yaml",
+
+      ],
+      "env": {
+        "PYTHONPATH": "${workspaceFolder}/apps/fred-agents",
+        "CONFIG_FILE": "${workspaceFolder}/apps/fred-agents/config/configuration_academy.yaml"
+      },
+      "justMyCode": false,
+      "console": "integratedTerminal"
+    },
+    {
+      "name": "Debug Knowledge Flow Backend (configuration.yaml)",
+      "type": "debugpy",
+      "request": "launch",
+      "python": "${workspaceFolder}/apps/knowledge-flow-backend/.venv/bin/python",
+      "cwd": "${workspaceFolder}/apps/knowledge-flow-backend",
+      "module": "uvicorn",
+      "args": [
+        "knowledge_flow_backend.main:create_app",
+        "--factory",
+        "--host",
+        "0.0.0.0",
+        "--port",
+        "8111",
+        "--log-level",
+        "info",
+        "--loop",
+        "asyncio",
+        "--reload",
+        "--reload-dir", "${workspaceFolder}/apps/knowledge-flow-backend/config",
+        "--reload-include", "*.py",
+        "--reload-include", "*.yaml"
+      ],
+      "env": {
+        "PYTHONPATH": "${workspaceFolder}/apps/knowledge-flow-backend",
+        "CONFIG_FILE": "${workspaceFolder}/apps/knowledge-flow-backend/config/configuration.yaml"
+      },
+      "justMyCode": false,
+      "console": "integratedTerminal"
+    },
+    {
+      "name": "Debug Knowledge Flow Backend (configuration_prod.yaml)",
+      "type": "debugpy",
+      "request": "launch",
+      "python": "${workspaceFolder}/apps/knowledge-flow-backend/.venv/bin/python",
+      "cwd": "${workspaceFolder}/apps/knowledge-flow-backend",
+      "module": "uvicorn",
+      "args": [
+        "knowledge_flow_backend.main:create_app",
+        "--factory",
+        "--host",
+        "0.0.0.0",
+        "--port",
+        "8111",
+        "--log-level",
+        "info",
+        "--loop",
+        "asyncio",
+        "--reload",
+        "--reload-dir", "${workspaceFolder}/apps/knowledge-flow-backend/config",
+        "--reload-include", "*.py",
+        "--reload-include", "*.yaml"
+      ],
+      "env": {
+        "PYTHONPATH": "${workspaceFolder}/apps/knowledge-flow-backend",
+        "CONFIG_FILE": "${workspaceFolder}/apps/knowledge-flow-backend/config/configuration_prod.yaml"
+      },
+      "justMyCode": false,
+      "console": "integratedTerminal"
+    },
+    {
+      "name": "Debug Control Plane Backend (configuration_prod.yaml)",
+      "type": "debugpy",
+      "request": "launch",
+      "python": "${workspaceFolder}/apps/control-plane-backend/.venv/bin/python",
+      "cwd": "${workspaceFolder}/apps/control-plane-backend",
+      "module": "uvicorn",
+      "args": [
+        "control_plane_backend.main:create_app",
+        "--factory",
+        "--host",
+        "0.0.0.0",
+        "--port",
+        "8222",
+        "--log-level",
+        "info",
+        "--loop",
+        "asyncio",
+        "--reload",
+        "--reload-dir", "${workspaceFolder}/apps/control-plane-backend/config",
+        "--reload-include", "*.py",
+        "--reload-include", "*.yaml",
+
+      ],
+      "env": {
+        "PYTHONPATH": "${workspaceFolder}/apps/control-plane-backend",
+        "CONFIG_FILE": "${workspaceFolder}/apps/control-plane-backend/config/configuration_prod.yaml"
+      },
+      "justMyCode": false,
+      "console": "integratedTerminal"
+    },
+    {
+      "name": "Debug all Knowledge Flow Backend tests",
+      "type": "debugpy",
+      "request": "launch",
+      "module": "pytest",
+      "cwd": "${workspaceFolder}/apps/knowledge-flow-backend",
+      "args": [
+        "-s",
+        "-q"
+      ],
+      "envFile": "config/.env",
+      "env": {
+        "PYTHONPATH": "${workspaceFolder}/apps/knowledge-flow-backend/knowledge_flow_backend",
+        "PATH": "${workspaceFolder}/.venv/bin:${env:PATH}",
+        "LOG_LEVEL": "DEBUG"
+      },
+      "justMyCode": false
+    },
+    {
+      "name": "Debug all Fred Agents tests",
+      "type": "debugpy",
+      "request": "launch",
+      "module": "pytest",
+      "cwd": "${workspaceFolder}/apps/fred-agents",
+      "args": [
+        "-s",
+        "-q"
+      ],
+      "envFile": "config/.env",
+      "env": {
+        "PYTHONPATH": "${workspaceFolder}/apps/fred-agents/fred_agents",
+        "PATH": "${workspaceFolder}/.venv/bin:${env:PATH}",
+        "LOG_LEVEL": "DEBUG"
+      },
+      "justMyCode": false
+    },
+    {
+      "name": "Debug one Knowledge Flow Backend test",
+      "type": "debugpy",
+      "request": "launch",
+      "module": "pytest",
+      "cwd": "${workspaceFolder}/apps/knowledge-flow-backend",
+      "args": [
+        "-s",
+        "-vv",
+        "knowledge_flow_backend/tests/services/test_output_processor_service.py::TestOutputProcessorService::test_process_real_pdf_success"
+      ],
+      "justMyCode": false,
+      "envFile": "config/.env",
+      "env": {
+        "PYTHONPATH": "${workspaceFolder}/apps/knowledge-flow-backend/knowledge_flow_backend",
+        "PATH": "${workspaceFolder}/.venv/bin:${env:PATH}",
+        "LOG_LEVEL": "DEBUG"
+      },
+      "console": "integratedTerminal"
+    },
+    {
+      "name": "Debug current Knowledge Flow Backend test file",
+      "type": "debugpy",
+      "request": "launch",
+      "module": "pytest",
+      "cwd": "${workspaceFolder}/apps/knowledge-flow-backend",
+      "args": [
+        "-s",
+        "-vv",
+        "${file}"
+      ],
+      "envFile": "config/.env",
+      "env": {
+        "PYTHONPATH": "${workspaceFolder}/apps/knowledge-flow-backend/knowledge_flow_backend",
+        "PATH": "${workspaceFolder}/.venv/bin:${env:PATH}",
+        "LOG_LEVEL": "DEBUG"
+      },
+      "justMyCode": false
+    },
+    {
+      "name": "Debug current Fred Agents test file",
+      "type": "debugpy",
+      "request": "launch",
+      "module": "pytest",
+      "cwd": "${workspaceFolder}/apps/fred-agents",
+      "args": [
+        "-s",
+        "-vv",
+        "${file}"
+      ],
+      "envFile": "config/.env",
+      "env": {
+        "PYTHONPATH": "${workspaceFolder}/apps/fred-agents/fred_agents",
+        "PATH": "${workspaceFolder}/.venv/bin:${env:PATH}",
+        "LOG_LEVEL": "DEBUG"
+      },
+      "justMyCode": false
+    },
+    {
+      "name": "Debug Fred Frontend",
+      "type": "node-terminal",
+      "request": "launch",
+      "command": "npm run dev",
+      "cwd": "${workspaceFolder}/apps/frontend"
+    },
+    {
+      "name": "Debug Knowledge Flow Worker",
+      "type": "debugpy",
+      "request": "launch",
+      "python": "${workspaceFolder}/apps/knowledge-flow-backend/.venv/bin/python",
+      "cwd": "${workspaceFolder}/apps/knowledge-flow-backend",
+      "program": "${workspaceFolder}/apps/knowledge-flow-backend/knowledge_flow_backend/main_worker.py",
+      "args": [
+        "--config-path",
+        "./config/configuration_worker.yaml"
+      ],
+      "env": {
+        "PYTHONPATH": ".",
+        "ENV_FILE": "${workspaceFolder}/apps/knowledge-flow-backend/config/.env",
+        "CONFIG_FILE": "${workspaceFolder}/apps/knowledge-flow-backend/config/configuration_worker.yaml",
+        "LOG_LEVEL": "info"
+      },
+      "console": "integratedTerminal",
+      "justMyCode": false
+    }
+  ]
+}

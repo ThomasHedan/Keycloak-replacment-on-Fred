@@ -1,0 +1,77 @@
+services:
+     
+# -----------------------------------------------------------------------------
+# Fred frontend and backend
+# -----------------------------------------------------------------------------
+
+  agentic-backend:
+    image: ghcr.io/thalesgroup/fred-agent/agentic-backend:0.1
+    container_name: agentic-backend
+    build:
+      context: ../../
+      dockerfile: agentic-backend/dockerfiles/Dockerfile-dev
+    env_file: "~/.fred/openai-api-key.env"
+    environment:
+      NO_PROXY: "*"
+      PYTHONUNBUFFERED: 1  # Pour voir les logs en temps réel
+    command:
+      - --server.configurationPath
+      - /app/config/configuration.yaml
+      - --server.baseUrlPath
+      - /fred
+    volumes:
+      - ../../agentic-backend:/app
+      - vol-kubeconfig:/home/fred-user/.kube:ro
+    networks:
+      - app-network
+    ports:
+      - "0.0.0.0:8000:8000/tcp"
+      - "5678:5678"  # Port pour le débogueur
+
+
+  frontend:
+    image: ghcr.io/thalesgroup/fred-agent/frontend:0.1
+    container_name: frontend
+    build:
+      context: ../../
+      dockerfile: frontend/dockerfiles/Dockerfile-dev
+    environment:
+      NO_PROXY: "*"
+      VITE_BACKEND_URL_API: http://localhost:8000
+      VITE_WEBSOCKET_URL: ws://localhost:8000/fred/chatbot/query
+      VITE_USE_AUTH: "false"
+    volumes:
+      - ../../frontend:/app
+    networks:
+      - app-network
+    ports:
+      - "0.0.0.0:5173:5173/tcp"
+
+  knowledge-flow-backend:
+    image: ghcr.io/thalesgroup/fred-agent/knowledge-flow-backend:0.1
+    container_name: knowledge-flow-backend
+    build:
+      context: ../../
+      dockerfile: apps/knowledge-flow-backend/dockerfiles/Dockerfile-dev
+    environment:
+      NO_PROXY: "*"
+    command:
+      - --config-path 
+      - /app/config/configuration.yaml
+    volumes:
+      # Mount the whole project (RW mode)
+      - ../../apps/knowledge-flow-backend:/app:rw
+    networks:
+      - app-network
+    ports:
+      - "0.0.0.0:8111:8111/tcp"
+
+volumes:
+  vol-kubeconfig:
+    external: true
+    name: vol-kubeconfig
+
+networks:
+  app-network:
+    external: true
+    name: fred-shared-network

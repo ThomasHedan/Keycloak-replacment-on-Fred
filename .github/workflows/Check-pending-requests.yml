@@ -1,0 +1,412 @@
+name: Check pending request
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+
+permissions:
+  contents: read
+
+jobs:
+  # Job to detect changes
+  detect-changes:
+    runs-on: ubuntu-24.04
+    # Those outputs are variables that will be shared to the check
+    outputs:
+      frontend: ${{ steps.changes.outputs.frontend }}
+      agentic: ${{ steps.changes.outputs.agentic }}
+      knowledge-flow: ${{ steps.changes.outputs.knowledge-flow }}
+      deploy-chart: ${{ steps.changes.outputs.deploy-chart }}
+      fred-core: ${{ steps.changes.outputs.fred-core }}
+      control-plane: ${{ steps.changes.outputs.control-plane }}
+      fred-sdk: ${{ steps.changes.outputs.fred-sdk }}
+      fred-runtime: ${{ steps.changes.outputs.fred-runtime }}
+      fred-agents: ${{ steps.changes.outputs.fred-agents }}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # Enough needed to detect changes
+
+      - name: Detect changes
+        uses: dorny/paths-filter@v2
+        id: changes
+        with:
+          filters: |
+            frontend:
+              - 'apps/frontend/**'
+            agentic:
+              - 'agentic-backend/**'
+            deploy-chart:
+              - 'deploy/charts/**'
+            knowledge-flow:
+              - 'apps/knowledge-flow-backend/**'
+            fred-core:
+              - 'libs/fred-core/**'
+            control-plane:
+              - 'apps/control-plane-backend/**'
+            fred-sdk:
+              - 'libs/fred-sdk/**'
+            fred-runtime:
+              - 'libs/fred-runtime/**'
+            fred-agents:
+              - 'apps/fred-agents/**'
+
+  # Job to run code quality checks on the entire repository
+  code-quality:
+    runs-on: ubuntu-24.04
+    needs: detect-changes
+    if: needs.detect-changes.outputs.knowledge-flow == 'true' || needs.detect-changes.outputs.fred-core == 'true' || needs.detect-changes.outputs.control-plane == 'true' || needs.detect-changes.outputs.fred-sdk == 'true' || needs.detect-changes.outputs.fred-runtime == 'true' || needs.detect-changes.outputs.fred-agents == 'true'
+    strategy:
+      fail-fast: false
+      matrix:
+        directory: [apps/knowledge-flow-backend, libs/fred-core, apps/control-plane-backend, libs/fred-sdk, libs/fred-runtime, apps/fred-agents]
+        check:
+          - lint
+          - format
+          - import-order
+          - sast
+          # - detect-secret # todo: baseline not working, fix it and re enable this check
+          - type-check
+        include:
+          # Knowledge flow backend runs when knowledge-flow or fred-core changes
+          - directory: apps/knowledge-flow-backend
+            condition: needs.detect-changes.outputs.knowledge-flow == 'true' || needs.detect-changes.outputs.fred-core == 'true'
+          # Fred core runs when fred-core changes
+          - directory: libs/fred-core
+            condition: needs.detect-changes.outputs.fred-core == 'true'
+          # Control plane backend runs when control-plane or fred-core changes
+          - directory: apps/control-plane-backend
+            condition: needs.detect-changes.outputs.control-plane == 'true' || needs.detect-changes.outputs.fred-core == 'true'
+          # Fred SDK runs when fred-sdk changes
+          - directory: libs/fred-sdk
+            condition: needs.detect-changes.outputs.fred-sdk == 'true'
+          # Fred Runtime runs when fred-runtime or fred-sdk changes
+          - directory: libs/fred-runtime
+            condition: needs.detect-changes.outputs.fred-runtime == 'true' || needs.detect-changes.outputs.fred-sdk == 'true'
+          # Fred Agents runs when fred-agents, fred-runtime, or fred-sdk changes
+          - directory: apps/fred-agents
+            condition: needs.detect-changes.outputs.fred-agents == 'true' || needs.detect-changes.outputs.fred-runtime == 'true' || needs.detect-changes.outputs.fred-sdk == 'true'
+    name: Code Quality - ${{ matrix.directory }} - ${{ matrix.check }}
+
+    steps:
+      - uses: actions/checkout@v4
+        if: ${{ matrix.condition }}
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+
+      - name: Setup Python environment
+        if: ${{ matrix.condition }}
+        uses: ./.github/actions/setup-python-env
+        with:
+          working-directory: ${{ matrix.directory }}
+
+      - name: Run ${{ matrix.check }}
+        if: ${{ matrix.condition }}
+        run: |
+          cd ${{ matrix.directory }}/
+          make ${{ matrix.check }}
+        env:
+          UV: uv
+
+  backend-tests:
+    runs-on: ubuntu-24.04
+    needs: detect-changes
+    if: needs.detect-changes.outputs.knowledge-flow == 'true' || needs.detect-changes.outputs.fred-core == 'true' || needs.detect-changes.outputs.control-plane == 'true' || needs.detect-changes.outputs.fred-sdk == 'true' || needs.detect-changes.outputs.fred-runtime == 'true' || needs.detect-changes.outputs.fred-agents == 'true'
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: fred-core
+            directory: libs/fred-core
+            unit-target: test
+            integration-target: test-integration
+            needs-pandoc: false
+            should-run: ${{ needs.detect-changes.outputs.fred-core == 'true' }}
+          - name: knowledge-flow-backend
+            directory: apps/knowledge-flow-backend
+            unit-target: test
+            integration-target: ""
+            needs-pandoc: true
+            should-run: ${{ needs.detect-changes.outputs.knowledge-flow == 'true' || needs.detect-changes.outputs.fred-core == 'true' }}
+          - name: control-plane-backend
+            directory: apps/control-plane-backend
+            unit-target: test
+            integration-target: ""
+            needs-pandoc: false
+            should-run: ${{ needs.detect-changes.outputs.control-plane == 'true' || needs.detect-changes.outputs.fred-core == 'true' }}
+          - name: fred-sdk
+            directory: libs/fred-sdk
+            unit-target: test
+            integration-target: ""
+            needs-pandoc: false
+            should-run: ${{ needs.detect-changes.outputs.fred-sdk == 'true' }}
+          - name: fred-runtime
+            directory: libs/fred-runtime
+            unit-target: test
+            integration-target: ""
+            needs-pandoc: false
+            should-run: ${{ needs.detect-changes.outputs.fred-runtime == 'true' || needs.detect-changes.outputs.fred-sdk == 'true' }}
+          - name: fred-agents
+            directory: apps/fred-agents
+            unit-target: test
+            integration-target: ""
+            needs-pandoc: false
+            should-run: ${{ needs.detect-changes.outputs.fred-agents == 'true' || needs.detect-changes.outputs.fred-runtime == 'true' || needs.detect-changes.outputs.fred-sdk == 'true' }}
+    name: Backend Tests - ${{ matrix.name }}
+
+    steps:
+      - name: Checkout code
+        if: ${{ matrix.should-run }}
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+
+      - name: Install system dependencies
+        if: ${{ matrix.should-run && matrix.needs-pandoc }}
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y --no-install-recommends pandoc
+
+      - name: Setup Python environment
+        if: ${{ matrix.should-run }}
+        uses: ./.github/actions/setup-python-env
+        with:
+          working-directory: ${{ matrix.directory }}
+
+      - name: Run unit tests
+        if: ${{ matrix.should-run }}
+        run: make ${{ matrix.unit-target }}
+        working-directory: ${{ matrix.directory }}
+        env:
+          UV: uv
+
+      - name: Run integration tests
+        if: ${{ matrix.should-run && matrix.integration-target != '' }}
+        run: make ${{ matrix.integration-target }}
+        working-directory: ${{ matrix.directory }}
+        env:
+          UV: uv
+
+  # Job to run code quality checks on the frontend
+  frontend-code-quality:
+    runs-on: ubuntu-24.04
+    needs: detect-changes
+    if: needs.detect-changes.outputs.frontend == 'true'
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - check: type-check
+          - check: format-check
+          # - check: knip
+          #   continue-on-error: true
+    name: Code Quality - frontend - ${{ matrix.check }}
+    continue-on-error: ${{ matrix.continue-on-error == true }}
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22.13.0"
+
+      - name: Run ${{ matrix.check }}
+        run: |
+          cd apps/frontend/
+          make ${{ matrix.check }}
+
+  # Job to check the frontend
+  frontend-checks:
+    runs-on: ubuntu-24.04
+    needs: detect-changes
+    if: needs.detect-changes.outputs.frontend == 'true'
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22.13.0"
+
+      - name: Frontend build
+        run: |
+          cd apps/frontend/
+          make build
+
+      - name: Frontend run
+        run: |
+          cd apps/frontend/
+          timeout 30s make run || true
+
+  # Job to check helm charts
+  deploy-charts-checks:
+    runs-on: ubuntu-24.04
+    needs: detect-changes
+    if: needs.detect-changes.outputs.deploy-chart == 'true'
+
+    steps:
+      - name: Checkout charts
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+
+      - name: Check chart - Fred
+        run: |
+          helm template fred deploy/charts/fred \
+            --set-string applications.fred-agents.image.tag=swift-dev \
+            --set-string applications.knowledge-flow-backend.image.tag=swift-dev \
+            --set-string applications.knowledge-flow-worker.image.tag=swift-dev \
+            --set-string applications.control-plane-backend.image.tag=swift-dev \
+            --set-string applications.control-plane-worker.image.tag=swift-dev \
+            --set-string applications.frontend.image.tag=swift-dev
+
+  # Job to check fred-agents app startup
+  fred-agents-checks:
+    runs-on: ubuntu-24.04
+    needs: detect-changes
+    if: needs.detect-changes.outputs.fred-agents == 'true' || needs.detect-changes.outputs.fred-runtime == 'true' || needs.detect-changes.outputs.fred-sdk == 'true'
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+
+      - name: Setup Python environment
+        uses: ./.github/actions/setup-python-env
+        with:
+          working-directory: apps/fred-agents
+
+      - name: Test backend startup
+        run: |
+          cd apps/fred-agents/
+          timeout 30s make run || true
+
+  # Job for knowledge-flow
+  knowledge-flow-backend-checks:
+    runs-on: ubuntu-24.04
+    needs: detect-changes
+    if: needs.detect-changes.outputs.knowledge-flow == 'true' || needs.detect-changes.outputs.fred-core == 'true'
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+
+      - name: Setup Python environment
+        uses: ./.github/actions/setup-python-env
+        with:
+          working-directory: apps/knowledge-flow-backend
+
+      - name: Check route security
+        run: |
+          cd apps/knowledge-flow-backend/
+          make check-route-security
+
+      - name: Build and test
+        run: |
+          cd apps/knowledge-flow-backend/
+          timeout 30s make run || true
+
+  # Job to check control-plane backend
+  control-plane-backend-checks:
+    runs-on: ubuntu-24.04
+    needs: detect-changes
+    if: needs.detect-changes.outputs.control-plane == 'true' || needs.detect-changes.outputs.fred-core == 'true'
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+
+      - name: Setup Python environment
+        uses: ./.github/actions/setup-python-env
+        with:
+          working-directory: apps/control-plane-backend
+
+      - name: Check route security
+        run: |
+          cd apps/control-plane-backend/
+          make check-route-security
+
+      - name: Test backend startup
+        run: |
+          cd apps/control-plane-backend/
+          timeout 30s make run || true
+
+  # Job to check OpenAPI spec drift when backends or frontend change
+  openapi-drift-check:
+    runs-on: ubuntu-24.04
+    needs: detect-changes
+    if: needs.detect-changes.outputs.fred-runtime == 'true' || needs.detect-changes.outputs.fred-sdk == 'true' || needs.detect-changes.outputs.knowledge-flow == 'true' || needs.detect-changes.outputs.control-plane == 'true' || needs.detect-changes.outputs.fred-core == 'true' || needs.detect-changes.outputs.frontend == 'true'
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: runtime
+            backend-directory: libs/fred-runtime
+            make-target: update-runtime-api
+            slice-path: apps/frontend/src/slices/runtime/runtimeOpenApi.ts
+            condition: ${{ needs.detect-changes.outputs.fred-runtime == 'true' || needs.detect-changes.outputs.fred-sdk == 'true' || needs.detect-changes.outputs.frontend == 'true' }}
+          - name: knowledge-flow
+            backend-directory: apps/knowledge-flow-backend
+            make-target: update-knowledge-flow-api
+            slice-path: apps/frontend/src/slices/knowledgeFlow/knowledgeFlowOpenApi.ts
+            condition: ${{ needs.detect-changes.outputs.knowledge-flow == 'true' || needs.detect-changes.outputs.fred-core == 'true' || needs.detect-changes.outputs.frontend == 'true' }}
+          - name: control-plane
+            backend-directory: apps/control-plane-backend
+            make-target: update-control-plane-api
+            slice-path: apps/frontend/src/slices/controlPlane/controlPlaneOpenApi.ts
+            condition: ${{ needs.detect-changes.outputs.control-plane == 'true' || needs.detect-changes.outputs.fred-core == 'true' || needs.detect-changes.outputs.frontend == 'true' }}
+    name: OpenAPI Drift - ${{ matrix.name }}
+
+    steps:
+      - name: Checkout code
+        if: ${{ matrix.condition }}
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+
+      - name: Setup Node.js
+        if: ${{ matrix.condition }}
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22.13.0"
+
+      - name: Setup backend dependencies
+        if: ${{ matrix.condition }}
+        uses: ./.github/actions/setup-python-env
+        with:
+          working-directory: ${{ matrix.backend-directory }}
+
+      - name: Backup current slice
+        if: ${{ matrix.condition }}
+        run: cp -f ${{ matrix.slice-path }} /tmp/openapi-backup.ts 2>/dev/null || true
+
+      - name: Regenerate OpenAPI slice
+        if: ${{ matrix.condition }}
+        run: |
+          cd apps/frontend/
+          make ${{ matrix.make-target }}
+        env:
+          UV: uv
+
+      - name: Check for drift
+        if: ${{ matrix.condition }}
+        run: |
+          if ! diff -q /tmp/openapi-backup.ts ${{ matrix.slice-path }} > /dev/null 2>&1; then
+            echo "❌ DRIFT DETECTED: ${{ matrix.name }} OpenAPI slice has changed but wasn't updated in the PR"
+            echo "Please run 'make ${{ matrix.make-target }}' in apps/frontend/ and commit the changes"
+            exit 1
+          fi
+          echo "✅ ${{ matrix.name }} OpenAPI slice is up to date"

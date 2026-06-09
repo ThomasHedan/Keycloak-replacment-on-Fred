@@ -1,0 +1,61 @@
+{
+	"folders": [
+		{
+			"path": ".."
+		},
+		{
+			"path": "../libs/fred-sdk"
+		},
+		{
+			"path": "../libs/fred-runtime"
+		},
+		{
+			"path": "../libs/fred-core"
+		},
+		{
+			"path": "../agentic-backend"
+		},
+		{
+			"path": "../apps/fred-agents"
+		},
+		{
+			"path": "../apps/control-plane-backend"
+		},
+		{
+			"path": "../apps/knowledge-flow-backend"
+		},
+		{
+			"path": "../frontend"
+		}
+	],
+	"settings": {
+		"files.exclude": {
+			"agentic-backend/": true,
+			"apps/fred-agents/": true,
+			"control-plane-backend/": true,
+			"knowledge-flow/": true,
+			"frontend/": true,
+			"../libs/fred-sdk/": true,
+			"../libs/fred-runtime/": true,
+			"../libs/fred-core/": true,
+		},
+		"i18n-ally.localesPaths": [
+			"frontend/src/locales",
+		],
+		"i18n-ally.pathMatcher": "{locale}/translation.json",
+		"i18n-ally.keystyle": "nested",
+		"i18n-ally.enabledFrameworks": [
+			"react",
+			"react-i18next"
+		]
+	},
+	"extensions": {
+		"recommendations": [
+			"charliermarsh.ruff",
+			"esbenp.prettier-vscode",
+			"vivaxy.vscode-conventional-commits",
+			"lokalise.i18n-ally",
+			"openfga.openfga-vscode"
+		]
+	}
+}

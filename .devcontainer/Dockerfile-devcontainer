@@ -1,0 +1,70 @@
+FROM mcr.microsoft.com/devcontainers/base:ubuntu-24.04
+
+ARG USERNAME=vscode
+ARG USER_UID=1000
+ARG USER_GID=${USER_UID}
+
+ENV DEBIAN_FRONTEND=noninteractive
+
+RUN apt-get update && \
+    apt-get install -y --no-install-recommends \
+    bash-completion \
+    build-essential \
+    ca-certificates \
+    curl \
+    fd-find \
+    git \
+    gnupg \
+    jq \
+    less \
+    libffi-dev \
+    libmagic-dev \
+    libpq-dev \
+    libsqlite3-dev \
+    libssl-dev \
+    locales \
+    make \
+    pandoc \
+    python3 \
+    python3-venv \
+    python3-pip \
+    sqlite3 \
+    sudo \
+    unzip \
+    wget \
+    xz-utils \
+    zip \
+    libreoffice \
+    fonts-dejavu \
+    tmux && \
+    curl -fsSL https://deb.nodesource.com/setup_22.x | bash - && \
+    apt-get install -y nodejs && \
+    npm install -g npm@latest && \
+    rm -rf /var/lib/apt/lists/*
+
+RUN YQ_VERSION="4.44.3" && \
+    curl -L "https://github.com/mikefarah/yq/releases/download/v${YQ_VERSION}/yq_linux_amd64" -o /usr/local/bin/yq && \
+    chmod +x /usr/local/bin/yq
+
+RUN curl -LsSf https://astral.sh/uv/install.sh | sh && \
+    mv /root/.local/bin/uv /usr/local/bin/uv && \
+    chmod +x /usr/local/bin/uv
+
+# Add man pages back
+RUN --mount=type=bind,source=.devcontainer/scripts/add-man.sh,target=/tmp/add-man.sh \
+    bash /tmp/add-man.sh
+
+RUN if ! id -u ${USERNAME} >/dev/null 2>&1; then \
+    groupadd --gid ${USER_GID} ${USERNAME} && \
+    useradd --uid ${USER_UID} --gid ${USER_GID} -m ${USERNAME} && \
+    usermod -aG sudo ${USERNAME}; \
+    fi && \
+    echo "${USERNAME} ALL=(ALL) NOPASSWD:ALL" > /etc/sudoers.d/${USERNAME}
+
+USER ${USERNAME}
+
+WORKDIR /workspaces
+
+ENV PATH="/home/${USERNAME}/.local/bin:${PATH}"
+
+CMD ["sleep", "infinity"]

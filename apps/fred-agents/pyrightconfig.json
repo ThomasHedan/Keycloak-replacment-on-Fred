@@ -1,0 +1,12 @@
+{
+  "include": ["fred_agents", "tests"],
+  "typeCheckingMode": "standard",
+  "venvPath": ".",
+  "venv": ".venv",
+  "reportMissingTypeStubs": false,
+  "extraPaths": [
+    "../../libs/fred-core",
+    "../../libs/fred-sdk",
+    "../../libs/fred-runtime"
+  ]
+}

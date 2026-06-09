@@ -1,0 +1,128 @@
+{{- $mode := include "agentic-bench.mode" . -}}
+{{- $common := .Values.bench.common -}}
+{{- $modeConfig := index .Values.bench.modes $mode -}}
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: {{ include "agentic-bench.fullname" . }}
+  labels:
+{{ include "agentic-bench.labels" . | indent 4 }}
+{{- with .Values.job.labels }}
+{{ toYaml . | indent 4 }}
+{{- end }}
+{{- with .Values.job.annotations }}
+  annotations:
+{{ toYaml . | indent 4 }}
+{{- end }}
+spec:
+  backoffLimit: {{ .Values.job.backoffLimit }}
+  ttlSecondsAfterFinished: {{ .Values.job.ttlSecondsAfterFinished }}
+  template:
+    metadata:
+      labels:
+{{ include "agentic-bench.labels" . | indent 8 }}
+{{- with .Values.job.labels }}
+{{ toYaml . | indent 8 }}
+{{- end }}
+    spec:
+      restartPolicy: {{ .Values.job.restartPolicy }}
+      {{- with .Values.podSecurityContext }}
+      securityContext:
+{{ toYaml . | indent 8 }}
+      {{- end }}
+      {{- if or .Values.serviceAccount.create .Values.serviceAccount.name }}
+      serviceAccountName: {{ default (include "agentic-bench.fullname" .) .Values.serviceAccount.name }}
+      {{- end }}
+      containers:
+        - name: bench
+          image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          {{- with .Values.securityContext }}
+          securityContext:
+{{ toYaml . | indent 12 }}
+          {{- end }}
+          args:
+            - "-url={{ $common.url }}"
+            {{- if $common.agentUUID }}
+            - "-agent-uuid={{ $common.agentUUID }}"
+            {{- else }}
+            - "-agent={{ $common.agent }}"
+            {{- end }}
+            - "-message={{ $common.message }}"
+            - "-clients={{ $common.clients }}"
+            {{- if $common.agentCreateURL }}
+            - "-agent-create-url={{ $common.agentCreateURL }}"
+            {{- end }}
+            {{- if and (not $common.agentUUID) $modeConfig.ensureV2DefinitionRef }}
+            - "-ensure-v2-definition-ref={{ $modeConfig.ensureV2DefinitionRef }}"
+            {{- end }}
+            {{- if and (not $common.agentUUID) $modeConfig.ensureV2ProfileID }}
+            - "-ensure-v2-profile-id={{ $modeConfig.ensureV2ProfileID }}"
+            {{- end }}
+            {{- if and (not $common.agentUUID) $modeConfig.ensureAgentName }}
+            - "-ensure-agent-name={{ $modeConfig.ensureAgentName }}"
+            {{- end }}
+            {{- if gt (int $common.requestsPerClient) 0 }}
+            - "-requests-per-client={{ $common.requestsPerClient }}"
+            {{- else }}
+            - "-requests={{ $common.requests }}"
+            {{- end }}
+            - "-timeout={{ $common.timeoutSeconds }}s"
+            - "-session-title={{ $common.sessionTitle }}"
+            - "-prepare-concurrency={{ $common.prepareConcurrency }}"
+            {{- if $modeConfig.searchPolicy }}
+            - "-search-policy={{ $modeConfig.searchPolicy }}"
+            {{- end }}
+            {{- if $modeConfig.searchRagScope }}
+            - "-search-rag-scope={{ $modeConfig.searchRagScope }}"
+            {{- end }}
+            {{- if gt (int $common.readLimitBytes) 0 }}
+            - "-read-limit-bytes={{ int $common.readLimitBytes }}"
+            {{- end }}
+            {{- if not $common.createSession }}
+            - "-create-session=false"
+            {{- end }}
+            {{- if not $common.deleteSession }}
+            - "-delete-session=false"
+            {{- end }}
+            {{- if not $common.prepareSessions }}
+            - "-prepare-sessions=false"
+            {{- end }}
+            {{- if and (not $common.agentUUID) $modeConfig.deleteCreatedAgent }}
+            - "-delete-created-agent=true"
+            {{- end }}
+            {{- if $common.insecureTLS }}
+            - "-insecure"
+            {{- end }}
+            {{- if $common.tokenInQuery }}
+            - "-token-in-query"
+            {{- end }}
+            {{- if $common.allowEmptyToken }}
+            - "-allow-empty-token"
+            {{- end }}
+            {{- with $common.extraArgs }}
+{{ toYaml . | indent 12 }}
+            {{- end }}
+          {{- if .Values.tokenSecret.name }}
+          env:
+            - name: AGENTIC_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.tokenSecret.name }}
+                  key: {{ .Values.tokenSecret.key }}
+                  optional: {{ .Values.tokenSecret.optional }}
+          {{- end }}
+          resources:
+{{ toYaml .Values.resources | indent 12 }}
+      {{- with .Values.nodeSelector }}
+      nodeSelector:
+{{ toYaml . | indent 8 }}
+      {{- end }}
+      {{- with .Values.affinity }}
+      affinity:
+{{ toYaml . | indent 8 }}
+      {{- end }}
+      {{- with .Values.tolerations }}
+      tolerations:
+{{ toYaml . | indent 8 }}
+      {{- end }}

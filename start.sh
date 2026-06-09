@@ -1,0 +1,19 @@
+#!/bin/bash
+
+# Stop all subprocesses when the script receives Ctrl+C
+trap "echo 'Stopping...'; kill 0" SIGINT
+
+# agentic backend
+(cd apps/control-plane-backend && make run 2>&1 | sed "s/^/[CONTROL-PLANE] /") &
+
+# agentic backend
+(cd agentic-backend && make run 2>&1 | sed "s/^/[AGENTIC] /") &
+
+# knowledge-flow backend
+(cd apps/knowledge-flow-backend && make run 2>&1 | sed "s/^/[KF] /") &
+
+# frontend
+(cd apps/frontend && make run 2>&1 | sed "s/^/[FRONTEND] /") &
+
+# wait for all background jobs
+wait

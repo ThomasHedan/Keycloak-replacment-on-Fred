@@ -1,0 +1,130 @@
+# Copyright Thales 2025
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+"""
+Temporal worker responsible for running ingestion pipelines.
+
+This worker connects to the Temporal service, registers all ingestion-related
+activities and workflows, and listens on the configured task queue.
+
+It is launched in a background thread from main.py during application startup.
+"""
+
+import concurrent.futures
+import logging
+
+from temporalio.client import Client
+from temporalio.worker import Worker
+
+from knowledge_flow_backend.common.structures import TemporalSchedulerConfig
+from knowledge_flow_backend.features.scheduler.activities import (
+    emit_ingestion_task_event,
+    fast_delete_vectors,
+    fast_store_vectors,
+    output_process,
+)
+from knowledge_flow_backend.features.scheduler.pull_files_activities import (
+    create_pull_file_metadata,
+    pull_input_process,
+)
+from knowledge_flow_backend.features.scheduler.push_files_activities import (
+    get_push_file_metadata,
+    push_input_process,
+)
+from knowledge_flow_backend.features.scheduler.workflow import (
+    CreatePullFileMetadata,
+    FastDeleteVectors,
+    FastStoreVectors,
+    GetPushFileMetadata,
+    OutputProcess,
+    ProcessPull,
+    ProcessPullFile,
+    ProcessPush,
+    ProcessPushFile,
+    PullInputProcess,
+    PushInputProcess,
+)
+
+logger = logging.getLogger(__name__)
+
+
+async def run_worker(
+    config: TemporalSchedulerConfig,
+    *,
+    max_concurrent_workflow_tasks: int = 1,
+    max_concurrent_activities: int = 1,
+):
+    """
+    Connect to Temporal and start the ingestion worker.
+
+    Why:
+        Workflow-task and activity concurrency have different runtime bottlenecks,
+        so they must be configured independently for predictable ingestion throughput.
+    How:
+        Apply dedicated limits to Temporal `Worker` workflow-task and activity-task
+        execution, and size the sync activity thread pool from activity concurrency.
+    Usage example:
+        `await run_worker(config, max_concurrent_workflow_tasks=8, max_concurrent_activities=16)`
+
+    Args:
+        config (TemporalSchedulerConfig): Temporal connection + task queue config.
+        max_concurrent_workflow_tasks (int): Max concurrent workflow tasks handled
+            by this worker process.
+        max_concurrent_activities (int): Max concurrent activity tasks handled by
+            this worker process.
+    """
+    workflow_task_concurrency = max(1, int(max_concurrent_workflow_tasks))
+    activity_concurrency = max(1, int(max_concurrent_activities))
+    logger.info(f"🔗 Connecting to Temporal at {config.host} (namespace={config.namespace})")
+    client = await Client.connect(
+        target_host=config.host,
+        namespace=config.namespace,
+    )
+    logger.info(f"[SCHEDULER] Connected to Temporal. Registering worker on queue: '{config.task_queue}'")
+
+    # Use thread pool executor for sync activities
+    executor = concurrent.futures.ThreadPoolExecutor(max_workers=activity_concurrency)
+    worker = Worker(
+        client=client,
+        task_queue=config.task_queue,
+        workflows=[
+            ProcessPull,
+            ProcessPullFile,
+            ProcessPush,
+            ProcessPushFile,
+            CreatePullFileMetadata,
+            GetPushFileMetadata,
+            PullInputProcess,
+            PushInputProcess,
+            OutputProcess,
+            FastStoreVectors,
+            FastDeleteVectors,
+        ],
+        activities=[
+            create_pull_file_metadata,
+            get_push_file_metadata,
+            pull_input_process,
+            push_input_process,
+            output_process,
+            fast_store_vectors,
+            fast_delete_vectors,
+            emit_ingestion_task_event,
+        ],
+        activity_executor=executor,
+        max_concurrent_workflow_tasks=workflow_task_concurrency,
+        max_concurrent_activities=activity_concurrency,
+    )
+
+    logger.info("[SCHEDULER] Temporal worker is now running and ready to receive ingestion jobs.")
+    await worker.run()

@@ -1,0 +1,18 @@
+{{- define "common-library.configmap-backend" }}
+
+{{- if .app.configuration_type.backend }}
+{{- $configFileName := default "configuration.yaml" .app.configurationFileName }}
+
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: "{{ .app.applicationName }}-back"
+  namespace: {{ .root.Release.Namespace }}
+data:
+  {{ $configFileName }}: |
+{{ .app.configuration | toYaml | indent 4 }}
+
+{{- end }}
+
+{{ end -}}
