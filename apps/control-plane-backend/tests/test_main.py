@@ -1715,7 +1715,7 @@ async def test_enrich_groups_dedupes_owner_alias_and_canonical_user(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     from control_plane_backend.teams.dependencies import TeamServiceDependencies
-    from control_plane_backend.teams.service import _enrich_groups_with_team_data
+    from control_plane_backend.teams.service import _enrich_teams_with_data
 
     class _FakeMetadataStore:
         async def get_by_team_ids(
@@ -1728,10 +1728,6 @@ async def test_enrich_groups_dedupes_owner_alias_and_canonical_user(
             _ = key
             _ = expires
             raise AssertionError("No banner lookup expected in this test.")
-
-    class _FakeAdmin:
-        async def a_get_group_members(self, _group_id: str, _query: dict) -> list[dict]:
-            return [{"id": "user-1"}]
 
     async def _fake_get_team_users_by_relation(*_args, **_kwargs):
         return {"user-1", "marc"}
@@ -1757,7 +1753,6 @@ async def test_enrich_groups_dedupes_owner_alias_and_canonical_user(
         configuration=mock_config,
         rebac=cast(Any, object()),
         scheduler_backend=cast(Any, object()),
-        create_keycloak_admin_client=cast(Any, lambda: object()),
         get_team_metadata_store=lambda: cast(Any, _FakeMetadataStore()),
         get_content_store=lambda: cast(Any, _FakeContentStore()),
         get_session_store=cast(Any, lambda: object()),
@@ -1767,13 +1762,10 @@ async def test_enrich_groups_dedupes_owner_alias_and_canonical_user(
         run_lifecycle_manager_once_in_memory=cast(Any, lambda _input: object()),
     )
 
-    teams = await _enrich_groups_with_team_data(
-        cast(Any, _FakeAdmin()),
+    teams = await _enrich_teams_with_data(
         rebac=cast(Any, object()),
         user=cast(Any, type("User", (), {"uid": "user-1"})()),
-        groups=[
-            KeycloakGroupSummary(id=TeamId("team-1"), name="fredlab", member_count=0)
-        ],
+        team_ids=[TeamId("team-1")],
         deps=fake_deps,
     )
 
@@ -1807,7 +1799,7 @@ async def test_upload_team_banner_checks_can_update_info_permission(
     async def _fake_validate_team_and_check_permission(*_args, **_kwargs):
         permissions = _args[3]
         captured_permissions.append(permissions)
-        return object(), {"id": "thales", "name": "Thales"}, None
+        return None
 
     monkeypatch.setattr(
         "control_plane_backend.teams.service._validate_team_and_check_permission",
